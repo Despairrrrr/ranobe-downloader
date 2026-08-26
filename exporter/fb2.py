@@ -29,8 +29,7 @@ def save_fb2(
     volume: int,
     chapter_number: float,
     book_title: str,
-    chapter_text: str,
-    image_urls: list[str] | None = None,
+    elements: list[dict],
     output_dir: str = ".",
 ) -> str:
     chapter_num_str = str(int(chapter_number)) if chapter_number == int(chapter_number) else str(chapter_number).replace(".", "_")
@@ -40,24 +39,24 @@ def save_fb2(
 
     body_elements = []
     binaries = []
+    img_counter = 0
 
-    if image_urls:
-        for i, url in enumerate(image_urls):
+    for elem in elements:
+        if elem["type"] == "image":
+            url = elem["url"]
             try:
                 b64, content_type = _download_image(url)
             except Exception:
                 continue
-            img_id = f"img{i}"
+            img_id = f"img{img_counter}"
+            img_counter += 1
             body_elements.append(f'      <image l:href="#{img_id}"/>')
             b64_wrapped = textwrap.fill(b64, 76)
             binaries.append(f'  <binary id="{img_id}" content-type="{content_type}">{b64_wrapped}</binary>')
-
-    if chapter_text.strip():
-        paragraphs = chapter_text.split("\n")
-        for p in paragraphs:
-            p = p.strip()
-            if p:
-                body_elements.append(f"      <p>{_escape(p)}</p>")
+        elif elem["type"] == "paragraph":
+            text = elem["text"]
+            if text.strip():
+                body_elements.append(f"      <p>{_escape(text)}</p>")
 
     body_content = "\n".join(body_elements)
     binaries_content = "\n".join(binaries)

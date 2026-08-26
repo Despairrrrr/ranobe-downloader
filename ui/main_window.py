@@ -90,8 +90,8 @@ class MainWindow(QMainWindow):
         try:
             slug = extract_slug(url)
             chapters = get_chapters(slug)
-            book_title, text, image_urls = download_chapter(slug, chapters, chapter, volume)
-            filepath = save_fb2(volume, chapter, book_title, text, image_urls)
+            book_title, elements = download_chapter(slug, chapters, chapter, volume)
+            filepath = save_fb2(volume, chapter, book_title, elements)
             filename = os.path.basename(filepath)
             self._finish(f"Сохранено: {filename}")
         except ApiError as e:

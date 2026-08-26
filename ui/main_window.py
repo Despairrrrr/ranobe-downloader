@@ -1,7 +1,7 @@
 import os
 import threading
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
     QLabel,
     QLineEdit,
@@ -24,6 +24,8 @@ from scraper.api_client import (
 
 
 class MainWindow(QMainWindow):
+    _done = pyqtSignal(str, bool)
+
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Скачиватель ранобэ")
@@ -58,6 +60,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.status_label)
 
         self._set_status("")
+        self._done.connect(self._finish)
 
     def _set_status(self, text: str):
         self.status_label.setText(text)
@@ -105,24 +108,24 @@ class MainWindow(QMainWindow):
             chapters = get_chapters(slug)
 
             if chapter is not None:
-                book_title, elements = download_chapter(slug, chapters, chapter, volume)
-                filepath = save_fb2(volume, chapter, book_title, elements)
+                book_title, chapter_name, elements = download_chapter(slug, chapters, chapter, volume)
+                filepath = save_fb2(volume, chapter, book_title, elements, chapter_name=chapter_name)
                 filename = os.path.basename(filepath)
-                self._finish(f"Сохранено: {filename}")
+                self._done.emit(f"Сохранено: {filename}", False)
             else:
                 chapter_ints = get_all_chapter_ints(chapters, volume)
                 if not chapter_ints:
                     raise ApiError(f"В томе {volume} нет глав")
                 saved = []
                 for ch_int in chapter_ints:
-                    book_title, elements = download_chapter(slug, chapters, ch_int, volume)
-                    filepath = save_fb2(volume, ch_int, book_title, elements)
+                    book_title, chapter_name, elements = download_chapter(slug, chapters, ch_int, volume)
+                    filepath = save_fb2(volume, ch_int, book_title, elements, chapter_name=chapter_name)
                     saved.append(os.path.basename(filepath))
-                self._finish(f"Сохранено файлов: {len(saved)}")
+                self._done.emit(f"Сохранено файлов: {len(saved)}", False)
         except ApiError as e:
-            self._finish(str(e), is_error=True)
+            self._done.emit(str(e), True)
         except Exception as e:
-            self._finish(f"Неизвестная ошибка: {e}", is_error=True)
+            self._done.emit(f"Неизвестная ошибка: {e}", True)
 
     def _finish(self, message: str, is_error: bool = False):
         if is_error:

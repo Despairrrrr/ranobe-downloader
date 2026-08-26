@@ -93,7 +93,7 @@ def _pick_branch(chapter: dict) -> int:
     return max(counts, key=counts.get)
 
 
-def _extract_ordered_elements_from_dict(data) -> list[dict]:
+def _extract_ordered_elements_from_dict(data, uuid_to_url: dict | None = None) -> list[dict]:
     result = []
     if isinstance(data, dict):
         if data.get("type") == "paragraph":
@@ -103,14 +103,21 @@ def _extract_ordered_elements_from_dict(data) -> list[dict]:
                 result.append({"type": "paragraph", "text": " ".join(texts)})
         elif data.get("type") == "image":
             url = data.get("src", "")
+            if not url:
+                attrs = data.get("attrs", {})
+                images = attrs.get("images", [])
+                if images and isinstance(images[0], dict):
+                    img_uuid = images[0].get("image", "")
+                    if img_uuid and uuid_to_url:
+                        url = uuid_to_url.get(img_uuid, "")
             if url:
                 result.append({"type": "image", "url": url})
         else:
             for value in data.values():
-                result.extend(_extract_ordered_elements_from_dict(value))
+                result.extend(_extract_ordered_elements_from_dict(value, uuid_to_url))
     elif isinstance(data, list):
         for item in data:
-            result.extend(_extract_ordered_elements_from_dict(item))
+            result.extend(_extract_ordered_elements_from_dict(item, uuid_to_url))
     return result
 
 
@@ -137,11 +144,19 @@ def get_chapter_content(slug: str, chapter: dict) -> list[dict]:
     params = {"volume": volume, "number": number, "branch_id": branch_id}
     data = _api_get(f"{slug}/chapter", params=params)
 
-    content = data.get("data", {}).get("content", "")
+    chapter_data = data.get("data", {})
+    content = chapter_data.get("content", "")
 
     if isinstance(content, dict):
         if "content" in content:
-            return _extract_ordered_elements_from_dict(content)
+            attachments = chapter_data.get("attachments", [])
+            uuid_to_url = {}
+            for a in attachments:
+                name = a.get("name", "")
+                url = a.get("originalUrl", "") or a.get("url", "")
+                if name and url:
+                    uuid_to_url[name] = f"https://ranobelib.me{url}"
+            return _extract_ordered_elements_from_dict(content, uuid_to_url)
         return []
 
     if isinstance(content, str) and content.strip():
@@ -150,10 +165,13 @@ def get_chapter_content(slug: str, chapter: dict) -> list[dict]:
     return []
 
 
-def download_chapter(slug: str, chapters: list[dict], target: int, volume: int) -> tuple[str, list[dict]]:
+def download_chapter(slug: str, chapters: list[dict], target: int, volume: int) -> tuple[str, str, list[dict]]:
     matched = find_chapters_by_number(chapters, target, volume)
     if not matched:
         raise ApiError(f"Глава {target} тома {volume} не найдена в списке глав")
+
+    names = [ch.get("name", "") for ch in matched if ch.get("name", "")]
+    chapter_name = " — ".join(names) if names else ""
 
     book_title = get_book_title(slug)
     all_elements = []
@@ -168,4 +186,4 @@ def download_chapter(slug: str, chapters: list[dict], target: int, volume: int) 
     if not all_elements:
         raise ApiError(f"Не удалось извлечь текст главы {target}")
 
-    return book_title, all_elements
+    return book_title, chapter_name, all_elements

@@ -14,7 +14,13 @@ from PyQt6.QtWidgets import (
 )
 
 from exporter.fb2 import save_fb2
-from scraper.api_client import ApiError, download_chapter, extract_slug, get_chapters
+from scraper.api_client import (
+    ApiError,
+    download_chapter,
+    extract_slug,
+    get_all_chapter_ints,
+    get_chapters,
+)
 
 
 class MainWindow(QMainWindow):
@@ -38,10 +44,9 @@ class MainWindow(QMainWindow):
         self.volume_input.setValue(1)
         layout.addWidget(self.volume_input)
 
-        layout.addWidget(QLabel("Номер главы:"))
-        self.chapter_input = QSpinBox()
-        self.chapter_input.setRange(0, 99999)
-        self.chapter_input.setValue(1)
+        layout.addWidget(QLabel("Номер главы (пусто — все главы тома):"))
+        self.chapter_input = QLineEdit()
+        self.chapter_input.setPlaceholderText("Оставить пустым для скачивания всех глав")
         layout.addWidget(self.chapter_input)
 
         self.download_btn = QPushButton("Скачать")
@@ -65,7 +70,7 @@ class MainWindow(QMainWindow):
 
     def _on_download(self):
         url = self.url_input.text().strip()
-        chapter = self.chapter_input.value()
+        chapter_text = self.chapter_input.text().strip()
         volume = self.volume_input.value()
 
         if not url:
@@ -80,20 +85,40 @@ class MainWindow(QMainWindow):
             )
             return
 
+        chapter = None
+        if chapter_text:
+            try:
+                chapter = int(chapter_text)
+            except ValueError:
+                QMessageBox.warning(self, "Ошибка", "Номер главы должен быть целым числом")
+                return
+
         self._set_loading(True)
         self._set_status("Загрузка...")
 
         thread = threading.Thread(target=self._download, args=(url, chapter, volume), daemon=True)
         thread.start()
 
-    def _download(self, url: str, chapter: int, volume: int):
+    def _download(self, url: str, chapter: int | None, volume: int):
         try:
             slug = extract_slug(url)
             chapters = get_chapters(slug)
-            book_title, elements = download_chapter(slug, chapters, chapter, volume)
-            filepath = save_fb2(volume, chapter, book_title, elements)
-            filename = os.path.basename(filepath)
-            self._finish(f"Сохранено: {filename}")
+
+            if chapter is not None:
+                book_title, elements = download_chapter(slug, chapters, chapter, volume)
+                filepath = save_fb2(volume, chapter, book_title, elements)
+                filename = os.path.basename(filepath)
+                self._finish(f"Сохранено: {filename}")
+            else:
+                chapter_ints = get_all_chapter_ints(chapters, volume)
+                if not chapter_ints:
+                    raise ApiError(f"В томе {volume} нет глав")
+                saved = []
+                for ch_int in chapter_ints:
+                    book_title, elements = download_chapter(slug, chapters, ch_int, volume)
+                    filepath = save_fb2(volume, ch_int, book_title, elements)
+                    saved.append(os.path.basename(filepath))
+                self._finish(f"Сохранено файлов: {len(saved)}")
         except ApiError as e:
             self._finish(str(e), is_error=True)
         except Exception as e:

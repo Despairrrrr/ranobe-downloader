@@ -31,6 +31,7 @@ def save_fb2(
     book_title: str,
     elements: list[dict],
     output_dir: str = ".",
+    chapter_name: str = "",
 ) -> str:
     chapter_num_str = str(int(chapter_number)) if chapter_number == int(chapter_number) else str(chapter_number).replace(".", "_")
     filename = f"том{volume}_глава{chapter_num_str}.fb2"
@@ -62,6 +63,8 @@ def save_fb2(
     binaries_content = "\n".join(binaries)
 
     chapter_title = f"Том {volume}, Глава {chapter_title_num}"
+    if chapter_name:
+        chapter_title += f" — {chapter_name}"
     fb2_parts = [
         f'<?xml version="1.0" encoding="utf-8"?>',
         f'<FictionBook xmlns="{FB2_NS}" xmlns:l="http://www.w3.org/1999/xlink">',

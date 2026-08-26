@@ -52,6 +52,15 @@ def get_chapters(slug: str) -> list[dict]:
     return data.get("data", [])
 
 
+def get_all_chapter_ints(chapters: list[dict], volume: int) -> list[int]:
+    vol_str = str(volume)
+    ints = set()
+    for ch in chapters:
+        if ch["volume"] == vol_str:
+            ints.add(int(float(ch["number"])))
+    return sorted(ints)
+
+
 def find_chapters_by_number(chapters: list[dict], target: int, volume: int) -> list[dict]:
     vol_str = str(volume)
     exact = [
